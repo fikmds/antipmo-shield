@@ -27,7 +27,7 @@ Secara lokal, set variabel environment `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_P
 
 ## Database
 
-Room SQLite, nama `anti_pmo_shield.db`, versi 1. Mode WAL dan foreign key aktif. Tidak ada `fallbackToDestructiveMigration`, jadi kenaikan versi schema harus disertai migration eksplisit. Schema diekspor ke `app/schemas/` lewat KSP.
+Room SQLite, nama `anti_pmo_shield.db`, versi 1. Tidak ada `fallbackToDestructiveMigration`, jadi kenaikan versi schema tidak akan menghapus data pengguna tanpa migration eksplisit.
 
 ## UI
 
