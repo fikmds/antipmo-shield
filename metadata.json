@@ -1,0 +1,7 @@
+{
+  "name": "Anti PMO Shield",
+  "description": "Aplikasi pelindung anti PMO dengan pendeteksi & pemblokir konten 18+, link terabox, link UC browser, kata kunci terlarang, dan regex lengkap beserta peringatan darurat.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
