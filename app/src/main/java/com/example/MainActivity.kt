@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.screens.AiCoachScreen
 import com.example.ui.screens.BlockedLogsScreen
+import com.example.ui.screens.EmergencyShieldScreen
 import com.example.ui.screens.FilterRulesScreen
 import com.example.ui.screens.HomeScreen
 import com.example.ui.theme.MyApplicationTheme
