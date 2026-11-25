@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.BlockedLog
 import com.example.data.model.CustomRule
 import com.example.data.model.RecoveryProfile
@@ -28,7 +29,15 @@ abstract class AntiPmoDatabase : RoomDatabase() {
                     context.applicationContext,
                     AntiPmoDatabase::class.java,
                     "anti_pmo_shield.db"
-                ).build().also { INSTANCE = it }
+                )
+                    .addCallback(object : RoomDatabase.Callback() {
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            db.execSQL("PRAGMA journal_mode=WAL")
+                            db.execSQL("PRAGMA foreign_keys=ON")
+                        }
+                    })
+                    .build()
+                    .also { INSTANCE = it }
             }
         }
     }
