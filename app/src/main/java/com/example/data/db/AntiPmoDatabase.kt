@@ -12,7 +12,7 @@ import com.example.data.model.RecoveryProfile
 @Database(
     entities = [BlockedLog::class, CustomRule::class, RecoveryProfile::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AntiPmoDatabase : RoomDatabase() {
     abstract fun blockedLogDao(): BlockedLogDao
