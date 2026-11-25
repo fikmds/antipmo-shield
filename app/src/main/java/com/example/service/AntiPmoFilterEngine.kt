@@ -5,7 +5,7 @@ import com.example.data.model.CustomRule
 data class FilterMatch(
     val matched: Boolean,
     val pattern: String,
-    val category: String, // "TERABOX", "UC_LINK", "ADULT_18+", "CUSTOM_REGEX", "KEYWORD"
+    val category: String,
     val reason: String
 )
 
@@ -16,6 +16,7 @@ object AntiPmoFilterEngine {
         "terabox.com",
         "teraboxapp.com",
         "1024tera",
+        "1024 terabox",
         "nephobox",
         "4funbox",
         "mirrobox",
@@ -25,15 +26,20 @@ object AntiPmoFilterEngine {
         "terabox link",
         "link terabox",
         "terabox video",
-        "terabox share"
+        "terabox share",
+        "terabox download",
+        "terabox apk"
     )
 
     val DEFAULT_UC_KEYWORDS = listOf(
         "uc browser link",
         "uc browser",
+        "ucweb",
         "ucweb link",
         "ucdown",
+        "uc browser apk",
         "9apps",
+        "wapka",
         "wapka link"
     )
 
@@ -60,18 +66,19 @@ object AntiPmoFilterEngine {
         "com.heytap.browser"
     )
 
-    // Full word matched adult keywords (must match on whole word boundary \b to prevent false positives while typing)
     val DEFAULT_ADULT_KEYWORDS = listOf(
         "bokep",
         "bokep indo",
         "bokep viral",
         "bokep jepang",
         "bokep barat",
+        "bokep terbaru",
         "video bokep",
         "link bokep",
         "jav",
         "jav sub indo",
         "javhd",
+        "javsub",
         "pornhub",
         "xvideos",
         "xnxx",
@@ -93,8 +100,13 @@ object AntiPmoFilterEngine {
         "komik 18+",
         "manhwa 18+",
         "video 18+",
+        "video dewasa",
+        "film dewasa",
         "link 18+",
         "18+ link",
+        "18+ dewasa",
+        "asupan 18+",
+        "asupan dewasa",
         "pemersatu bangsa",
         "ngocok",
         "coli",
@@ -102,6 +114,7 @@ object AntiPmoFilterEngine {
         "vcs",
         "open bo",
         "porn",
+        "porno",
         "xxx video",
         "erotic",
         "nsfw video",
@@ -114,7 +127,9 @@ object AntiPmoFilterEngine {
         "droplink 18+"
     )
 
-    // Precompiled word boundary regex map for accurate token matching
+    private fun compact(text: String): String =
+        text.lowercase().replace(Regex("[^\\p{L}\\p{N}+]"), "")
+
     private val ADULT_WORD_REGEXES = DEFAULT_ADULT_KEYWORDS.map { kw ->
         kw to Regex("""(?i)\b${Regex.escape(kw)}\b""")
     }
@@ -148,9 +163,15 @@ object AntiPmoFilterEngine {
         ),
         FilterRegexRule(
             id = "regex_nsfw_terms",
-            regex = Regex("""(?i)\b(porn|xxx|nsfw|hentai|ecchi|eroge|milf|gangbang|creampie|blowjob|anal|threesome|bdsm|bukkake|deepthroat|masturbat(e|ion)|masturbasi)\b"""),
+            regex = Regex("""(?i)\b(porn|porno|xxx|nsfw|hentai|ecchi|eroge|milf|gangbang|creampie|blowjob|anal|threesome|bdsm|bukkake|deepthroat|masturbat(e|ion)|masturbasi)\b"""),
             category = "ADULT_18+",
             description = "Global NSFW Keywords Regex"
+        ),
+        FilterRegexRule(
+            id = "regex_separated_adult_terms",
+            regex = Regex("""(?i)\b(?:b[\W_]*o[\W_]*k[\W_]*e[\W_]*p|p[\W_]*o[\W_]*r[\W_]*n|t[\W_]*e[\W_]*r[\W_]*a[\W_]*b[\W_]*o[\W_]*x)\b"""),
+            category = "ADULT_18+",
+            description = "Kata kunci dengan pemisah spasi atau tanda baca"
         )
     )
 
@@ -161,9 +182,6 @@ object AntiPmoFilterEngine {
         val description: String
     )
 
-    /**
-     * Inspects text, URL, and window content against default rules, whitelist, and custom user rules.
-     */
     fun evaluate(
         input: String,
         customRules: List<CustomRule> = emptyList(),
@@ -177,20 +195,34 @@ object AntiPmoFilterEngine {
         }
 
         val normalized = input.trim().lowercase()
+            .replace("\u200B", "")
+            .replace("\u00A0", " ")
+            .replace(Regex("\\s+"), " ")
+        val compactInput = compact(normalized)
 
-        // 0. Check Whitelist first: if input matches any whitelisted benign phrase, skip!
         for (w in whitelistedWords) {
             val cleanW = w.trim().lowercase()
             if (cleanW.isNotBlank() && normalized.contains(cleanW)) {
-                // If it's explicitly whitelisted (e.g. "javascript" or "version control"), do not block
-                return FilterMatch(matched = false, pattern = cleanW, category = "WHITELISTED", reason = "Dikecualikan (Whitelist: $cleanW)")
+                return FilterMatch(
+                    matched = false,
+                    pattern = cleanW,
+                    category = "WHITELISTED",
+                    reason = "Dikecualikan (Whitelist: $cleanW)"
+                )
             }
         }
 
-        // 1. Check Terabox Keywords & Regex (if enabled)
+        fun keywordHit(kw: String, regex: Regex): Boolean {
+            val compactKw = compact(kw)
+            val compactHit = kw.length >= 5 && compactKw.length >= 4 && compactInput.contains(compactKw)
+            return regex.containsMatchIn(normalized) ||
+                (kw.contains(" ") && normalized.contains(kw)) ||
+                compactHit
+        }
+
         if (filterTerabox) {
             for ((kw, regex) in TERABOX_WORD_REGEXES) {
-                if (regex.containsMatchIn(input) || (kw.contains(" ") && normalized.contains(kw))) {
+                if (keywordHit(kw, regex)) {
                     return FilterMatch(
                         matched = true,
                         pattern = kw,
@@ -201,10 +233,9 @@ object AntiPmoFilterEngine {
             }
         }
 
-        // 2. Check UC Browser keywords (if enabled)
         if (filterUc) {
             for ((kw, regex) in UC_WORD_REGEXES) {
-                if (regex.containsMatchIn(input) || (kw.contains(" ") && normalized.contains(kw))) {
+                if (keywordHit(kw, regex)) {
                     return FilterMatch(
                         matched = true,
                         pattern = kw,
@@ -215,10 +246,9 @@ object AntiPmoFilterEngine {
             }
         }
 
-        // 3. Check 18+ Adult Keywords (if enabled - No Porn Filter)
         if (filterAdult) {
             for ((kw, regex) in ADULT_WORD_REGEXES) {
-                if (regex.containsMatchIn(input) || (kw.contains(" ") && normalized.contains(kw))) {
+                if (keywordHit(kw, regex)) {
                     return FilterMatch(
                         matched = true,
                         pattern = kw,
@@ -229,13 +259,12 @@ object AntiPmoFilterEngine {
             }
         }
 
-        // 4. Check Default Regex Rules
         for (regexRule in DEFAULT_REGEX_PATTERNS) {
             if (regexRule.category == "TERABOX" && !filterTerabox) continue
             if (regexRule.category == "UC_LINK" && !filterUc) continue
             if (regexRule.category == "ADULT_18+" && !filterAdult) continue
 
-            if (regexRule.regex.containsMatchIn(input)) {
+            if (regexRule.regex.containsMatchIn(normalized)) {
                 return FilterMatch(
                     matched = true,
                     pattern = regexRule.id,
@@ -245,14 +274,13 @@ object AntiPmoFilterEngine {
             }
         }
 
-        // 5. Check Custom User Rules (From DB)
         for (custom in customRules) {
             if (!custom.isEnabled) continue
 
             if (custom.isRegex) {
                 try {
                     val regex = Regex(custom.pattern, RegexOption.IGNORE_CASE)
-                    if (regex.containsMatchIn(input)) {
+                    if (regex.containsMatchIn(normalized)) {
                         return FilterMatch(
                             matched = true,
                             pattern = custom.pattern,
@@ -261,11 +289,11 @@ object AntiPmoFilterEngine {
                         )
                     }
                 } catch (_: Exception) {
-                    // Invalid regex skipped gracefully
+                    // Invalid custom regex is ignored.
                 }
             } else {
                 val kwRegex = Regex("""(?i)\b${Regex.escape(custom.pattern)}\b""")
-                if (kwRegex.containsMatchIn(input) || normalized.contains(custom.pattern.lowercase())) {
+                if (kwRegex.containsMatchIn(normalized) || normalized.contains(custom.pattern.lowercase())) {
                     return FilterMatch(
                         matched = true,
                         pattern = custom.pattern,
@@ -279,4 +307,3 @@ object AntiPmoFilterEngine {
         return FilterMatch(matched = false, pattern = "", category = "", reason = "")
     }
 }
-

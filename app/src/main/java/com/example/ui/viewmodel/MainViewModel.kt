@@ -2,6 +2,7 @@ package com.example.ui.viewmodel
 
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Application
+import android.content.ComponentName
 import android.content.Context
 import android.os.Build
 import android.provider.Settings
@@ -206,16 +207,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun checkPermissions() {
         val app = getApplication<Application>()
+        val componentName = ComponentName(app, AntiPmoAccessibilityService::class.java).flattenToString()
+        val enabledSetting = Settings.Secure.getString(
+            app.contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty()
+        val secureEnabled = enabledSetting
+            .split(':')
+            .any { it.equals(componentName, ignoreCase = true) }
+
         val am = app.getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager
         val enabledServices = am?.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-
-        val serviceName = AntiPmoAccessibilityService::class.java.name
-        val isAccRunning = enabledServices?.any {
-            it.resolveInfo.serviceInfo.name == serviceName ||
-                    it.resolveInfo.serviceInfo.packageName == app.packageName
+        val runtimeEnabled = enabledServices?.any {
+            it.resolveInfo.serviceInfo.name == AntiPmoAccessibilityService::class.java.name ||
+                it.resolveInfo.serviceInfo.packageName == app.packageName
         } ?: false
 
-        _isAccessibilityEnabled.value = isAccRunning
+        _isAccessibilityEnabled.value = secureEnabled || runtimeEnabled
 
         val canDraw = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             Settings.canDrawOverlays(app)

@@ -36,8 +36,8 @@ class AntiPmoAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "AntiPmoService"
-        // Cooldown between repeated triggers for the EXACT same pattern and app (prevents event flood)
-        private const val MIN_INTERCEPT_INTERVAL_MS = 800L
+        private const val MIN_SAME_PATTERN_INTERVAL_MS = 5000L
+        private const val MIN_GLOBAL_INTERCEPT_INTERVAL_MS = 1200L
 
         @Volatile
         var isAlertCurrentlyShowing: Boolean = false
@@ -45,6 +45,8 @@ class AntiPmoAccessibilityService : AccessibilityService() {
         @Volatile
         var lastDismissTimeMs: Long = 0
     }
+
+    private var lastAnyInterceptTime: Long = 0
 
     override fun onCreate() {
         super.onCreate()
@@ -83,9 +85,9 @@ class AntiPmoAccessibilityService : AccessibilityService() {
         // 1. Never intercept our own app
         if (packageName == this.packageName) return
 
-        // 2. Short snooze protection after user deliberately dismissed the alert (max 2.5 seconds)
+        // Short snooze after the user deliberately dismissed the alert.
         val now = SystemClock.elapsedRealtime()
-        if (now - lastDismissTimeMs < 2500L) return
+        if (now - lastDismissTimeMs < 5000L) return
 
         // 3. Check App Whitelist
         val whitelistedApps = preferences.whitelistedApps.value
@@ -120,7 +122,7 @@ class AntiPmoAccessibilityService : AccessibilityService() {
             // Window-level node inspection
             val rootNode = rootInActiveWindow
             if (rootNode != null) {
-                extractTextFromNodeSafely(rootNode, collectedTexts, maxDepth = 12)
+                extractTextFromNodeSafely(rootNode, collectedTexts, maxDepth = 16)
             }
 
             if (collectedTexts.isEmpty()) return
@@ -162,13 +164,17 @@ class AntiPmoAccessibilityService : AccessibilityService() {
         val now = SystemClock.elapsedRealtime()
         val interceptKey = "$targetApp|$pattern"
 
-        // Anti-flood debounce: if exact same pattern on same app was triggered in last 800ms, skip duplicate
-        if (interceptKey == lastInterceptKey && (now - lastInterceptTime) < MIN_INTERCEPT_INTERVAL_MS) {
+        // Debounce repeated alerts so one page cannot flood the UI.
+        if (interceptKey == lastInterceptKey && (now - lastInterceptTime) < MIN_SAME_PATTERN_INTERVAL_MS) {
+            return
+        }
+        if ((now - lastAnyInterceptTime) < MIN_GLOBAL_INTERCEPT_INTERVAL_MS) {
             return
         }
 
         lastInterceptTime = now
         lastInterceptKey = interceptKey
+        lastAnyInterceptTime = now
 
         Log.w(TAG, "PMO SHIELD INTERCEPT: $category - $reason in $targetApp")
 
@@ -235,7 +241,7 @@ class AntiPmoAccessibilityService : AccessibilityService() {
         results: MutableList<String>,
         maxDepth: Int
     ) {
-        if (node == null || maxDepth <= 0 || results.size > 100) return
+        if (node == null || maxDepth <= 0 || results.size > 160) return
 
         try {
             node.text?.toString()?.let {
