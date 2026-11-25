@@ -5,7 +5,6 @@ import androidx.room.Database
 import androidx.room.Migration
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.RoomDatabase.JournalMode
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.model.BlockedLog
 import com.example.data.model.CustomRule
@@ -14,7 +13,7 @@ import com.example.data.model.RecoveryProfile
 @Database(
     entities = [BlockedLog::class, CustomRule::class, RecoveryProfile::class],
     version = 1,
-    exportSchema = false
+    exportSchema = true
 )
 abstract class AntiPmoDatabase : RoomDatabase() {
     abstract fun blockedLogDao(): BlockedLogDao
@@ -36,11 +35,11 @@ abstract class AntiPmoDatabase : RoomDatabase() {
                     "anti_pmo_shield.db"
                 )
                     .addMigrations(*MIGRATIONS)
-                    .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                     .addCallback(object : RoomDatabase.Callback() {
                         override fun onOpen(db: SupportSQLiteDatabase) {
-                            // SQLite leaves FK off by default; WAL opens multiple connections.
-                            db.execSQL("PRAGMA foreign_keys = ON")
+                            // WAL and FK stay on for every pooled connection.
+                            db.execSQL("PRAGMA journal_mode=WAL")
+                            db.execSQL("PRAGMA foreign_keys=ON")
                         }
                     })
                     .build()
